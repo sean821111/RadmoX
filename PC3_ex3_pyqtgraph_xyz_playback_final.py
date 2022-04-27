@@ -178,7 +178,7 @@ H0 = JB_RADAR_INSTALL_HEIGHT
 H1=1.5
 H2=0.5
 fall_state = 0
-FALL_THRESHOLD = 0.4
+FALL_THRESHOLD = -0.4
 FALL_DURATION = 3 # warning 3 seconds
 FALL_SEC = 0
 
@@ -494,7 +494,7 @@ def radarExec():
 					objBuf = objBuf.loc[objBuf.fN != locBuf.pop()]
 				#print("========objBuf:len:{:}".format(len(objBuf)))
 				#print(locBuf)
-				# print("objBuf: ", objBuf)				
+				print("objBuf: ", objBuf)				
 				
 				# fall detection algorithm
 				fall_detection(objBuf) 
@@ -518,8 +518,7 @@ def radarExec():
 				pos_np2[:,2] =  JB_RADAR_INSTALL_HEIGHT + pos_np2[:,2]  # WALL MOUNT
 				
 				pos2 = pos_np2
-
-				objBuf = objBuf.iloc[0:0]
+				# objBuf = objBuf.iloc[0:0]
 				
 				uFlag2 = True
 				flag2 = True
@@ -534,15 +533,18 @@ def radarExec():
 def fall_detection(yBuf):
 	global fall_state,H0,H1,H2, FALL_SEC
 	# print("v7len: ", len(yBuf))
-	
+	frame_period = 0.05
 	print(yBuf)
 	if len(yBuf)> 3:
-		curH = yBuf.iloc[-1]['posY']
-		preH = yBuf.iloc[-2]['posY']
-		lastH = yBuf.iloc[-4]['posY']
+		curFN = yBuf.iloc[-1]["fN"]
+		preFN = yBuf.iloc[-2]["fN"]
+		lastFN = yBuf.iloc[-4]["fN"]
+		curH = yBuf.iloc[-1]['posZ']
+		lastH = yBuf.iloc[-4]['posZ']
+		# velocity is minus which means the direction from top to zero
+		vel = (curH-lastH)/((curFN-lastFN)*frame_period) 
 		h=H0-curH
-		print("fN:{:}, current height: {:}".format(yBuf.iloc[-1]['fN'], curH))
-		print(curH-lastH)
+		print("fN:{:}, current H- last H: {:}, vel:{:}".format(yBuf.iloc[-1]['fN'], curH-lastH, vel))
 		if fall_state==0:
 			if h>H1:
 				fall_state = 1
@@ -551,36 +553,36 @@ def fall_detection(yBuf):
 			elif h <=H2:
 				fall_state = 3
 		elif fall_state == 1:
-			if curH-lastH > FALL_THRESHOLD:
+			if vel < FALL_THRESHOLD:
 				fall_state = 4 # FALL EVENT
 			if h>H1:
 				fall_state = 1
 			elif h <=H2:
 				fall_state = 3
 		elif fall_state == 2:
-			if curH-lastH > FALL_THRESHOLD:
+			if vel < FALL_THRESHOLD:
 				fall_state = 4
 			if h >=H1:
 				fall_state=1
 			elif h <=H2:
 				fall_state =3
 		elif fall_state ==3 :
-			if curH-lastH > FALL_THRESHOLD:
+			if vel < FALL_THRESHOLD:
 				fall_state = 4
-			if h <=H1 and h >=H2:
+			elif h <=H1 and h >=H2:
 				fall_state = 3
+			elif h > H1:
+				fall_state = 1
 		elif fall_state == 4:
 			# frame period = fn*50ms
-			FALL_SEC += (curH - preH)*0.05
+			FALL_SEC += (curFN - preFN)*frame_period
 			if FALL_SEC  > FALL_DURATION:
-				fall_state == 0
+				fall_state = 0
 				FALL_SEC = 0
 			if h >=H1:
 				fall_state=1
 				FALL_SEC = 0
-			elif h <=H1 and h >=H2:
-				fall_state = 2
-				FALL_SEC = 0
+	
 
 def get3dBox(targetCloud): 
 	xMax = np.max(targetCloud[:,0])
@@ -603,9 +605,9 @@ def uartThread(name):
 	while True:
 		radarExec()
 					
-thread1 = Thread(target = uartThread, args =("UART",))
-thread1.setDaemon(True)
-thread1.start()
+# thread1 = Thread(target = uartThread, args =("UART",))
+# thread1.setDaemon(True)
+# thread1.start()
 
 def text():
 	window = tk.Tk()
